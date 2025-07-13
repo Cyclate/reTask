@@ -16,6 +16,7 @@ The best portable opensource Python TinyTask inspired program that produces high
 ## Socials
 - [Discord Server](https://discord.gg/3MNnNBMsgj-blue)
 
+## License
 This work is licensed under a
 [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License][cc-by-nc-sa].
 
