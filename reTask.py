@@ -13,13 +13,16 @@ SOLS_ADDON = None
 class Config():
     def __init__(self):
         if os.path.exists("config.yml") == False:
-            yaml.dump(
-            {
-                "recordingHotKey": "F1",
-                "recordingMouse": True,
-                "defaultFileName": "macro.py",
-                "mouseMovementTracking": False,
-            }, open("config.yml", "x"))
+            # Todo
+            
+            # yaml.dump(
+            # {
+            #     "recordingHotKey": "F1",
+            #     "recordingMouse": True,
+            #     "defaultFileName": "macro.py",
+            #     "mouseMovementTracking": False,
+            # }, open("config.yml", "x"))
+            pass
         self.data = yaml.load(open("config.yml"), Loader)
         
     def save(self):
@@ -36,7 +39,7 @@ class Recording():
         self.macro = []
         
         self.sols_addon = sols_addon
-        self.optimized_time = None
+        self.optimized_time = 0
         self.last_action_timestamp = None
         self.no_keys_pressed = True
         

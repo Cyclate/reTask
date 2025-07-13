@@ -1,6 +1,6 @@
 recordingHotKey: F1
 recordingMouse: True
-defaultFileName: "output/macro.py"
+defaultOutputFile: "output/macro.py"
 mouseMovementTracking: False
 addons:
   Sols:
