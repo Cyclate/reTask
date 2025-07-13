@@ -215,7 +215,7 @@ class Recording():
         self.save()
     
     def save(self):
-        with open(self.config.data["defaultFileName"], "w") as file:
+        with open(self.config.data["defaultOutputFile"], "w") as file:
             file.write(f"{open("default_macro_output.py").read()}\n\nrun_macro({str(self.macro).replace("},", "},\n")})")
     
     def release_all_keys(self):
