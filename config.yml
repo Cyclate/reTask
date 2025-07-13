@@ -1,0 +1,8 @@
+recordingHotKey: F1
+recordingMouse: True
+defaultFileName: "macro.py"
+mouseMovementTracking: False
+addons:
+  Sols:
+    macroOptimisations: True
+    alignmentHotKey: F2
