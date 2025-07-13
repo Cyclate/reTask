@@ -36,7 +36,7 @@ class Recording():
         self.macro = []
         
         self.sols_addon = sols_addon
-        self.optimized_time = 0
+        self.optimized_time = None
         self.last_action_timestamp = None
         self.no_keys_pressed = True
         
@@ -55,14 +55,14 @@ class Recording():
             self.no_keys_pressed = True
         elif self.no_keys_pressed == True:
             self.optimized_time += time.perf_counter() - self.last_action_timestamp
+            self.no_keys_pressed = False
         else:
             self.no_keys_pressed = False
-    
-        return time.perf_counter() - self.start_time - self.optimized_time
+
+        print(self.optimized_time)
+        return (time.perf_counter() - self.start_time) - self.optimized_time
         
     def on_key_press(self, key):
-        
-        
         # Check if key is already pressed
         if self.keys_pressed.get(key, False) == True:
             return
@@ -176,7 +176,7 @@ class Recording():
             "y": y,
             "dx": dx,
             "dy": dy,
-            "timestamp": self.self.timestamp()
+            "timestamp": self.timestamp()
         }]
     
     def check_keys_pressed(self):
