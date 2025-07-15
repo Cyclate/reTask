@@ -1,0 +1,7 @@
+PyQt6>=6.4.0
+pynput>=1.7.6
+keyboard>=0.13.5
+PyYAML>=6.0
+psutil>=5.9.0
+mousekey>=0.12
+

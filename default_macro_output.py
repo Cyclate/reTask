@@ -1,4 +1,4 @@
-# Made using ReTask by JustSoftware
+# Made using ReTask by JustSoftware & cresqnt
 
 CPU_INTENSIVE_HIGH_ACCURACY_SLEEP = True
 from pynput.keyboard import Key, Controller as KeyboardController
