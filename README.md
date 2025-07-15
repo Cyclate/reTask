@@ -14,7 +14,7 @@ The best portable opensource Python TinyTask inspired program that produces high
 - [TO BE ADDED] Editability for macros.
 
 ## Socials
-- [Discord Server](https://discord.gg/3MNnNBMsgj-blue)
+- [Discord Server](https://discord.gg/8khGXqG7nA)
 
 ## License
 This work is licensed under a
