@@ -205,6 +205,9 @@ class PlaybackThread(QThread):
         from pynput.keyboard import Key, Controller as KeyboardController
         from pynput.mouse import Button, Controller as MouseController
 
+        # Wait 2 seconds before starting macro execution
+        time.sleep(2)
+
         try:
             from mousekey import MouseKey
             mkey = MouseKey()

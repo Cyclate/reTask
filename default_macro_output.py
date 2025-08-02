@@ -65,6 +65,8 @@ pynput_special_buttons = {
 }
 
 def run_macro(macro):
+    # Wait 2 seconds before starting macro execution
+    sleep(2)
     macro_start_time = perf_counter()
     
     for action in macro:
