@@ -4,6 +4,7 @@ import os
 import sys
 import yaml
 import json
+import keyboard
 from yaml import Loader, Dumper
 from pynput.keyboard import Key
 from pynput.mouse import Button
@@ -14,6 +15,12 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import QTimer, QThread, pyqtSignal
 
 SOLS_ADDON = None
+
+try:
+    import sols_rng_addon
+    SOLS_ADDON = sols_rng_addon
+except ImportError:
+    SOLS_ADDON = None
 
 class Config():
     def __init__(self):
@@ -296,11 +303,14 @@ class Recording():
         self.macro_optimisations = False
         self.keyboard_listener = None
         self.mouse_listener = None
+        self.hotkeys_to_ignore = set()
 
         if self.sols_addon and "addons" in self.config.data:
             if "Sols" in self.config.data["addons"]:
                 if self.config.data["addons"]["Sols"].get("macroOptimisations", False):
                     self.macro_optimisations = True
+        
+        self._setup_hotkeys_to_ignore()
     
     def timestamp(self):
         if self.last_action_timestamp is None:
@@ -315,9 +325,45 @@ class Recording():
             self.no_keys_pressed = False
         return (time.perf_counter() - self.start_time) - self.optimized_time
         
+    def _setup_hotkeys_to_ignore(self):
+        self.hotkeys_to_ignore.clear()
+        recording_hotkey = self.config.data.get("recordingHotKey", "").lower()
+        playback_hotkey = self.config.data.get("playbackHotKey", "").lower()
+        
+        if recording_hotkey:
+            if recording_hotkey.startswith('f') and recording_hotkey[1:].isdigit():
+                self.hotkeys_to_ignore.add(getattr(Key, recording_hotkey, None))
+            else:
+                self.hotkeys_to_ignore.add(recording_hotkey)
+        
+        if playback_hotkey:
+            if playback_hotkey.startswith('f') and playback_hotkey[1:].isdigit():
+                self.hotkeys_to_ignore.add(getattr(Key, playback_hotkey, None))
+            else:
+                self.hotkeys_to_ignore.add(playback_hotkey)
+        
+        if self.config.data.get("addons", {}).get("Sols"):
+            alignment_hotkey = self.config.data["addons"]["Sols"].get("alignmentHotKey", "").lower()
+            if alignment_hotkey:
+                if alignment_hotkey.startswith('f') and alignment_hotkey[1:].isdigit():
+                    self.hotkeys_to_ignore.add(getattr(Key, alignment_hotkey, None))
+                else:
+                    self.hotkeys_to_ignore.add(alignment_hotkey)
+
+    def _should_ignore_key(self, key):
+        if key in self.hotkeys_to_ignore:
+            return True
+        if isinstance(key, Key):
+            return key in self.hotkeys_to_ignore
+        return str(key).replace("'", "") in [str(h).replace("'", "") for h in self.hotkeys_to_ignore if h]
+
     def on_key_press(self, key):
         if self.keys_pressed.get(key, False):
             return
+        
+        if self._should_ignore_key(key):
+            return
+            
         self.keys_pressed[key] = True
 
         if isinstance(key, Key):
@@ -336,6 +382,10 @@ class Recording():
     def on_key_release(self, key):
         if not self.keys_pressed.get(key, False):
             return
+        
+        if self._should_ignore_key(key):
+            return
+            
         self.keys_pressed[key] = False
 
         if isinstance(key, Key):
@@ -494,8 +544,10 @@ class ReTaskGUI(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_display)
         self.capturing_key_for = None
+        self.global_hotkeys_registered = False
         self.init_ui()
         self.apply_dark_theme()
+        self.setup_global_hotkeys()
 
     def init_ui(self):
         self.setWindowTitle("ReTask")
@@ -894,6 +946,51 @@ class ReTaskGUI(QMainWindow):
         if show_message:
             QMessageBox.information(self, "Configuration Saved", "Settings have been saved successfully.")
 
+    def setup_global_hotkeys(self):
+        try:
+            keyboard.unhook_all()
+            self.global_hotkeys_registered = False
+            
+            recording_hotkey = self.config.data["recordingHotKey"].lower()
+            playback_hotkey = self.config.data["playbackHotKey"].lower()
+            
+            keyboard.add_hotkey(recording_hotkey, self.safe_toggle_recording)
+            keyboard.add_hotkey(playback_hotkey, self.safe_toggle_playback)
+            
+            if self.config.data.get("addons", {}).get("Sols"):
+                alignment_hotkey = self.config.data["addons"]["Sols"].get("alignmentHotKey", "").lower()
+                if alignment_hotkey and SOLS_ADDON:
+                    keyboard.add_hotkey(alignment_hotkey, self.safe_trigger_sols_alignment)
+            
+            self.global_hotkeys_registered = True
+        except Exception as e:
+            print(f"Error setting up global hotkeys: {e}")
+
+    def safe_toggle_recording(self):
+        try:
+            self.toggle_recording()
+        except Exception as e:
+            print(f"Error in safe_toggle_recording: {e}")
+
+    def safe_toggle_playback(self):
+        try:
+            self.toggle_playback()
+        except Exception as e:
+            print(f"Error in safe_toggle_playback: {e}")
+
+    def safe_trigger_sols_alignment(self):
+        try:
+            self.trigger_sols_alignment()
+        except Exception as e:
+            print(f"Error in safe_trigger_sols_alignment: {e}")
+
+    def trigger_sols_alignment(self):
+        if SOLS_ADDON:
+            try:
+                SOLS_ADDON.align_camera()
+            except Exception as e:
+                print(f"Error triggering Sols alignment: {e}")
+
     def load_config(self):
         try:
             self.config = Config()
@@ -914,9 +1011,17 @@ class ReTaskGUI(QMainWindow):
                 self.macro_optimizations_cb.setChecked(sols_config.get("macroOptimisations", False))
                 self.alignment_hotkey_input.setText(sols_config.get("alignmentHotKey", ""))
 
+            self.setup_global_hotkeys()
             QMessageBox.information(self, "Configuration Loaded", "Settings have been reloaded from file.")
         except Exception as e:
             QMessageBox.warning(self, "Load Error", f"Failed to load configuration: {str(e)}")
+
+    def closeEvent(self, event):
+        try:
+            keyboard.unhook_all()
+        except:
+            pass
+        event.accept()
 
 def main():
     app = QApplication(sys.argv)
