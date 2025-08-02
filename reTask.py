@@ -33,6 +33,7 @@ class Config():
             "playbackHotKey": "F3",
             "recordingMouse": True,
             "defaultOutputFile": os.path.join(self.output_dir, "macro.py"),
+            "macroName": "macro",
             "mouseMovementTracking": False,
             "playbackMode": "single",
             "loopCount": 1,
@@ -496,13 +497,34 @@ class Recording():
         self.save()
     
     def save(self):
-        os.makedirs(os.path.dirname(self.config.data["defaultOutputFile"]), exist_ok=True)
+        base_output_path = self.config.data["defaultOutputFile"]
+        macro_name = self.config.data.get("macroName", "macro")
+        
+        # Generate filename based on macro name
+        dir_path = os.path.dirname(base_output_path)
+        if macro_name and macro_name.strip() and macro_name != "macro":
+            base_name = f"{macro_name.strip()}.py"
+            output_file_path = os.path.join(dir_path, base_name)
+            
+            # Handle duplicate names by adding a number
+            counter = 1
+            while os.path.exists(output_file_path):
+                base_name = f"{macro_name.strip()}_{counter}.py"
+                output_file_path = os.path.join(dir_path, base_name)
+                counter += 1
+        else:
+            output_file_path = base_output_path
+        
+        os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
         try:
             with open("default_macro_output.py", "r") as template_file:
                 template_content = template_file.read()
-            with open(self.config.data["defaultOutputFile"], "w") as output_file:
+            with open(output_file_path, "w") as output_file:
                 macro_str = str(self.macro).replace("}, ", "},\n")
                 output_file.write(f"{template_content}\n\nrun_macro({macro_str})")
+            
+            print(f"Macro saved as: {output_file_path}")
+            
         except Exception as e:
             print(f"Error saving macro: {e}")
 
@@ -530,6 +552,7 @@ class Recording():
                     pass
         except Exception:
             pass
+
 
 class ReTaskGUI(QMainWindow):
     def __init__(self):
@@ -589,12 +612,21 @@ class ReTaskGUI(QMainWindow):
         status_layout.addWidget(self.time_label)
         main_layout.addLayout(status_layout)
 
+        # Macro name input
+        name_layout = QHBoxLayout()
+        name_layout.addWidget(QLabel("Macro Name:"))
+        self.macro_name_input = QLineEdit(self.config.data.get("macroName", "macro"))
+        self.macro_name_input.setPlaceholderText("Enter macro name...")
+        self.macro_name_input.textChanged.connect(lambda: self.save_config(show_message=False))
+        name_layout.addWidget(self.macro_name_input, 1)
+        main_layout.addLayout(name_layout)
+
         output_layout = QHBoxLayout()
-        output_layout.addWidget(QLabel("Output File:"))
-        self.output_path_label = QLabel(self.config.data["defaultOutputFile"])
+        output_layout.addWidget(QLabel("Output Directory:"))
+        self.output_path_label = QLabel(os.path.dirname(self.config.data["defaultOutputFile"]))
         self.output_path_label.setStyleSheet("QLabel { background-color: #3a3a3a; padding: 5px; border-radius: 3px; }")
         self.browse_button = QPushButton("Browse")
-        self.browse_button.clicked.connect(self.browse_output_file)
+        self.browse_button.clicked.connect(self.browse_output_directory)
         output_layout.addWidget(self.output_path_label, 1)
         output_layout.addWidget(self.browse_button)
         main_layout.addLayout(output_layout)
@@ -759,6 +791,45 @@ class ReTaskGUI(QMainWindow):
                 background-color: #2196f3;
                 border-color: #1976d2;
             }
+
+            QComboBox {
+                background-color: #3a3a3a;
+                border: 1px solid #555555;
+                border-radius: 4px;
+                padding: 6px;
+                color: #ffffff;
+                min-width: 100px;
+            }
+            QComboBox:focus {
+                border-color: #2196f3;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 20px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #ffffff;
+                margin-right: 5px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #3a3a3a;
+                border: 1px solid #555555;
+                selection-background-color: #2196f3;
+                color: #ffffff;
+            }
+            QSpinBox {
+                background-color: #3a3a3a;
+                border: 1px solid #555555;
+                border-radius: 4px;
+                padding: 6px;
+                color: #ffffff;
+            }
+            QSpinBox:focus {
+                border-color: #2196f3;
+            }
             QLabel {
                 color: #ffffff;
             }
@@ -920,14 +991,18 @@ class ReTaskGUI(QMainWindow):
         seconds = int(self.elapsed_time % 60)
         self.time_label.setText(f"Time: {minutes:02d}:{seconds:02d}")
 
-    def browse_output_file(self):
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Select Output File", self.config.data["defaultOutputFile"],
-            "Python Files (*.py);;All Files (*)"
+    def browse_output_directory(self):
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Output Directory", 
+            os.path.dirname(self.config.data["defaultOutputFile"])
         )
-        if file_path:
-            self.config.data["defaultOutputFile"] = file_path
-            self.output_path_label.setText(file_path)
+        if directory:
+            # Update the default output file path to use the new directory
+            filename = "macro.py"  # Default filename
+            new_path = os.path.join(directory, filename)
+            self.config.data["defaultOutputFile"] = new_path
+            self.output_path_label.setText(directory)
+            self.save_config(show_message=False)
 
     def save_config(self, show_message=True):
         self.config.data["recordingHotKey"] = self.hotkey_input.text()
@@ -936,6 +1011,9 @@ class ReTaskGUI(QMainWindow):
         self.config.data["mouseMovementTracking"] = self.mouse_movement_cb.isChecked()
         self.config.data["playbackMode"] = self.playback_mode_combo.currentText().lower()
         self.config.data["loopCount"] = self.loop_count_spin.value()
+        
+        if hasattr(self, 'macro_name_input'):
+            self.config.data["macroName"] = self.macro_name_input.text() or "macro"
 
         if hasattr(self, 'macro_optimizations_cb'):
             self.config.data["addons"]["Sols"]["macroOptimisations"] = self.macro_optimizations_cb.isChecked()
