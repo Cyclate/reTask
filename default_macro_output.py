@@ -65,18 +65,16 @@ pynput_special_buttons = {
 }
 
 def run_macro(macro):
-    sleep(2)  # initial delay
+    sleep(2)
     macro_start = perf_counter()
 
     for i, action in enumerate(macro):
-        # Compute time until this action
         target_time = action["timestamp"]
         now = perf_counter() - macro_start
         time_to_wait = target_time - now
         if time_to_wait > 0:
             sleep(time_to_wait)
 
-        # Execute the action
         match action["type"]:
             case "key_press":
                 key = action["key"]
@@ -100,6 +98,3 @@ def run_macro(macro):
                 if "x" in action:
                     mkey.move_to(int(action["x"]), int(action["y"]))
                 mc.scroll(action["dx"], action["dy"])
-                """case "wait":
-                # Optional: if your macro has wait durations separate from timestamps
-                sleep(action.get("duration", 0))"""
