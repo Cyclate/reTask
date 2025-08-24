@@ -6,7 +6,7 @@ import yaml
 import json
 import keyboard
 from yaml import Loader, Dumper
-from pynput.keyboard import Key
+from pynput.keyboard import Key, KeyCode
 from pynput.mouse import Button
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QGridLayout, QPushButton, QLabel,
@@ -244,13 +244,13 @@ class PlaybackThread(QThread):
 
         macro_start_time = time.perf_counter()
 
-        for action in macro:
+        for i, action in enumerate(macro):
             if self.should_stop:
                 break
 
             time_difference = action["timestamp"] - (time.perf_counter() - macro_start_time)
 
-            if time_difference > 0:
+            """if time_difference > 0:
                 start_time = time.perf_counter()
                 while not self.should_stop:
                     elapsed_time = time.perf_counter() - start_time
@@ -259,42 +259,61 @@ class PlaybackThread(QThread):
                         break
                     if remaining_time > 0.02:
                         time.sleep(max(remaining_time/2, 0.0001))
+            
+            if i > 0:
+                prev_ts = macro[i - 1].get("timestamp", 0)
+                curr_ts = action.get("timestamp", 0)
+                delta = curr_ts - prev_ts
+                if delta > 0:
+                    end_time = time.perf_counter() + delta
+                    while not self.should_stop and time.perf_counter() < end_time:
+                        time.sleep(0.01)"""
 
             if self.should_stop:
                 break
 
             action_type = action["type"]
-            if action_type == "key_press":
-                if "Key." in action["key"]:
-                    kc.press(pynput_special_keys[action["key"]])
-                else:
-                    kc.press(action["key"])
-            elif action_type == "key_release":
-                if "Key." in action["key"]:
-                    kc.release(pynput_special_keys[action["key"]])
-                else:
-                    kc.release(action["key"])
-            elif action_type == "mouse_movement" and mkey:
-                mkey.move_to(int(action["x"]), int(action["y"]))
-            elif action_type == "mouse_press":
-                mc.press(pynput_special_buttons[action["button"]])
-            elif action_type == "mouse_move_press":
-                if mkey:
-                    mkey.move_to(int(action["x"]), int(action["y"]))
-                mc.press(pynput_special_buttons[action["button"]])
-            elif action_type == "mouse_release":
-                mc.release(pynput_special_buttons[action["button"]])
-            elif action_type == "mouse_scroll":
-                if "x" in action and mkey:
-                    mkey.move_to(int(action["x"]), int(action["y"]))
-                mc.scroll(action["dx"], action["dy"])
+            match action_type:
+                case "key_press":
+                    if "Key." in action["key"]:
+                        kc.press(pynput_special_keys[action["key"]])
+                    else:
+                        kc.press(action["key"])
+                case "key_release":
+                    if "Key." in action["key"]:
+                        kc.release(pynput_special_keys[action["key"]])
+                    else:
+                        kc.release(action["key"])
+                case "mouse_movement":
+                    if mkey:
+                        mkey.move_to(int(action["x"]), int(action["y"]))
+                case "mouse_press":
+                    mc.press(pynput_special_buttons[action["button"]])
+                case "mouse_move_press":
+                    if mkey:
+                        mkey.move_to(int(action["x"]), int(action["y"]))
+                    mc.press(pynput_special_buttons[action["button"]])
+                case "mouse_release":
+                    mc.release(pynput_special_buttons[action["button"]])
+                case "mouse_scroll":
+                    if "x" in action and mkey:
+                        mkey.move_to(int(action["x"]), int(action["y"]))
+                    mc.scroll(action["dx"], action["dy"])
+                case "wait":
+                    duration = action.get("duration", 0)
+                    if duration > 0:
+                        end_time = time.perf_counter() + duration
+                        while not self.should_stop and time.perf_counter() < end_time:
+                            time.sleep(0.01)
+
 
     def stop(self):
         self.should_stop = True
 
 class Recording():
+
     def __init__(self, config, sols_addon=False):
-        self.keys_pressed = {}
+        self.keys_pressed = set()
         self.buttons_pressed = {}
         self.start_time = time.perf_counter()
         self.last_mouse_pos = None
@@ -315,6 +334,38 @@ class Recording():
                     self.macro_optimisations = True
         
         self._setup_hotkeys_to_ignore()
+
+    def _key_to_str(self, key):
+
+        if isinstance(key, Key):
+            return f"Key.{key.name}"
+        if isinstance(key, KeyCode):
+            return key.char if key.char is not None else str(key)
+        
+        s = str(key).replace("'", "")
+        return s if s.startswith("Key.") else s
+    
+    def add_action(self, action: dict):
+        ts = self.timestamp()
+
+        if (self.macro and action["type"] == "key_press"
+            and self.macro[-1]["type"] == "key_press"):
+            prev_ts = self.macro[-1]["timestamp"]
+            if ts - prev_ts <= 0.05:
+                ts = prev_ts
+
+        if self.macro:
+            prev_ts = self.macro[-1]["timestamp"]
+            delta = ts - prev_ts
+            if delta > 0.05:
+                self.macro.append({
+                    "type": "wait",
+                    "duration": round(delta, 3),
+                    "timestamp": prev_ts
+                })
+
+        action["timestamp"] = ts
+        self.macro.append(action)
     
     def timestamp(self):
         if self.last_action_timestamp is None:
@@ -362,48 +413,22 @@ class Recording():
         return str(key).replace("'", "") in [str(h).replace("'", "") for h in self.hotkeys_to_ignore if h]
 
     def on_key_press(self, key):
-        if self.keys_pressed.get(key, False):
-            return
-        
         if self._should_ignore_key(key):
             return
-            
-        self.keys_pressed[key] = True
-
-        if isinstance(key, Key):
-            self.macro.append({
-                "type": "key_press",
-                "key": f"Key.{key.name}",
-                "timestamp": self.timestamp()
-            })
-        else:
-            self.macro.append({
-                "type": "key_press",
-                "key": key,
-                "timestamp": self.timestamp()
-            })
+        k = self._key_to_str(key)
+        if k in self.keys_pressed:
+            return
+        self.keys_pressed.add(k)
+        self.add_action({"type": "key_press", "key": k})
 
     def on_key_release(self, key):
-        if not self.keys_pressed.get(key, False):
-            return
-        
         if self._should_ignore_key(key):
             return
-            
-        self.keys_pressed[key] = False
-
-        if isinstance(key, Key):
-            self.macro.append({
-                "type": "key_release",
-                "key": f"Key.{key.name}",
-                "timestamp": self.timestamp()
-            })
-        else:
-            self.macro.append({
-                "type": "key_release",
-                "key": key,
-                "timestamp": self.timestamp()
-            })
+        k = self._key_to_str(key)
+        if k not in self.keys_pressed:
+            return
+        self.keys_pressed.remove(k)
+        self.add_action({"type": "key_release", "key": k})
 
     def on_mouse_move(self, x, y):
         if self.last_mouse_pos == [x, y]:
@@ -465,7 +490,7 @@ class Recording():
             })
 
     def check_keys_pressed(self):
-        return not any(self.buttons_pressed.values()) and not any(self.keys_pressed.values())
+        return not self.buttons_pressed and not self.keys_pressed
 
     def start_recording(self):
         self.release_all_keys()
@@ -524,7 +549,7 @@ class Recording():
                 template_content = template_file.read()
             with open(output_file_path, "w") as output_file:
                 macro_str = str(self.macro).replace("}, ", "},\n")
-                output_file.write(f"{template_content}\n\nrun_macro({macro_str})")
+                output_file.write(f"{template_content}\n\nmacro_actions = {macro_str}\n\nif __name__ == \"__main__\":\n    run_macro({macro_str})")
             
             print(f"Macro saved as: {output_file_path}")
             
