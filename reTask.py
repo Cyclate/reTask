@@ -321,6 +321,7 @@ class Recording():
         self.sols_addon = sols_addon
         self.optimized_time = 0
         self.last_action_timestamp = None
+        self.last_time = None
         self.no_keys_pressed = True
         self.config = config
         self.macro_optimisations = False
@@ -345,26 +346,19 @@ class Recording():
         s = str(key).replace("'", "")
         return s if s.startswith("Key.") else s
     
+
     def add_action(self, action: dict):
-        ts = self.timestamp()
+        now = time.time()
 
-        if (self.macro and action["type"] == "key_press"
-            and self.macro[-1]["type"] == "key_press"):
-            prev_ts = self.macro[-1]["timestamp"]
-            if ts - prev_ts <= 0.05:
-                ts = prev_ts
-
-        if self.macro:
-            prev_ts = self.macro[-1]["timestamp"]
-            delta = ts - prev_ts
-            if delta > 0.05:
+        if self.last_time is not None:
+            delay = int((now - self.last_time) * 1000)  # ms
+            if delay > 0:
                 self.macro.append({
                     "type": "wait",
-                    "duration": round(delta, 3),
-                    "timestamp": prev_ts
+                    "duration": delay
                 })
 
-        action["timestamp"] = ts
+        self.last_time = now
         self.macro.append(action)
     
     def timestamp(self):

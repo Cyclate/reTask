@@ -64,30 +64,19 @@ pynput_special_buttons = {
     "Button.middle": Button.middle
 }
 
-def run_macro(macro):
-    sleep(2)
-    macro_start = perf_counter()
+def run_macro(macro, delay=2):
+    sleep(delay)
 
-    for i, action in enumerate(macro):
-        target_time = action["timestamp"]
-        now = perf_counter() - macro_start
-        time_to_wait = target_time - now
-        if time_to_wait > 0:
-            sleep(time_to_wait)
-
+    for action in macro:
         match action["type"]:
+            case "wait":
+                sleep(action["duration"] / 1000.0)
             case "key_press":
                 key = action["key"]
-                if key.startswith("Key."):
-                    kc.press(pynput_special_keys[key])
-                else:
-                    kc.press(key)
+                kc.press(pynput_special_keys.get(key, key))
             case "key_release":
                 key = action["key"]
-                if key.startswith("Key."):
-                    kc.release(pynput_special_keys[key])
-                else:
-                    kc.release(key)
+                kc.release(pynput_special_keys.get(key, key))
             case "mouse_movement":
                 mkey.move_to(int(action["x"]), int(action["y"]))
             case "mouse_press":
